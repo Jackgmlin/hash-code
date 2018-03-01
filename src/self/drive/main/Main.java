@@ -10,15 +10,19 @@ import java.util.List;
 
 public class Main {
 	public static void main(String[] args) throws IOException {
-		final String FILE_PATH_FROM = "D:\\Userfiles\\glin\\Downloads\\hashCode\\a_example.in";
-		final String FILE_PATH_TO = "D:\\Userfiles\\glin\\Downloads\\hashCode\\a_example.out";
+		final String FILE_PATH_FROM = "D:\\Userfiles\\glin\\Downloads\\hashCode\\c_no_hurry.in";
+		final String FILE_PATH_TO = "D:\\Userfiles\\glin\\Downloads\\hashCode\\c_no_hurry.out";
 
 		List<String> lines = FileIOer.read(FILE_PATH_FROM);
 
-		int nbOfRow = lines.size();
-		int nbOfCol = lines.get(0).length() / 2;
+		// int nbOfRow = Integer.valueOf(lines.get(0).split(" ")[0]);
+		int nbOfRow = lines.size() - 1;
+		int nbOfCol = Integer.valueOf(lines.get(0).split(" ").length);
 
-		char[][] matrix = MatrixHandler.writeToMatrix(lines, nbOfRow, nbOfCol);
+		// int nbOfRow = lines.size();
+		// int nbOfCol = lines.get(0).length() / 2;
+
+		int[][] matrix = MatrixHandler.writeToMatrix(lines, nbOfRow, nbOfCol);
 
 		Ride[] rides = MatrixHandler.generateRides(matrix);
 
@@ -26,16 +30,16 @@ public class Main {
 
 		sortRideList(rideList);
 
-		int carNb = Character.getNumericValue(matrix[0][2]);
+		int carNb = Integer.valueOf(lines.get(0).split(" ")[2]);
 
-		Point[] cars = new Point[carNb];
+		Car[] cars = new Car[carNb];
 
 		for (int i = 0; i < carNb; i++) {
-			cars[i] = new Point(0, 0);
+			cars[i] = new Car(new Point(0, 0), 0);
 		}
 
-		HashMap<Integer, ArrayList<Integer>> scheduledTrips = scheduleTrips(rides, carNb, cars);
-		
+		HashMap<Integer, ArrayList<Integer>> scheduledTrips = scheduleTrips(rides, carNb, cars, 0);
+
 		writeScheduledTrips(FILE_PATH_TO, scheduledTrips);
 
 	}
@@ -46,56 +50,115 @@ public class Main {
 		for (int i = 0; i < trips.size(); i++) {
 			ArrayList<Integer> listOfRides = trips.get(i);
 			int size = listOfRides.size();
-			
-			StringBuilder sb = new StringBuilder()
-					.append(String.valueOf(size))
-					.append(" ");
-			
+
+			StringBuilder sb = new StringBuilder().append(String.valueOf(size)).append(" ");
+
 			for (int j = 0; j < listOfRides.size(); j++) {
 				sb.append(listOfRides.get(j)).append(" ");
 			}
-			
+
 			toWrite.add(sb.toString());
 		}
-		
+
 		FileIOer.write(toWrite, FILE_PATH_TO);
 	}
 
-	private static HashMap<Integer, ArrayList<Integer>> scheduleTrips(Ride[] rides, int carNb, Point[] cars) {
+	private static HashMap<Integer, ArrayList<Integer>> scheduleTrips(Ride[] rides, int carNb, Car[] cars, int bonus) {
 		// (car, list of rides)
 		HashMap<Integer, ArrayList<Integer>> output = new HashMap<>();
 
 		for (int i = 0; i < rides.length; i++) {
-			if (i < carNb) {
-				ArrayList<Integer> arrayList = new ArrayList<>();
-				arrayList.add(rides[i].rideNb);
-				output.put(i, arrayList);
-				// update car place
-				cars[i] = rides[i].endP;
+			Ride ride = rides[i];
+
+			if (couldArriveInTime(cars, ride)) {
+				int carIndex = i;
+				if (output.size() < carNb) {
+					ArrayList<Integer> arrayList = new ArrayList<>();
+					arrayList.add(ride.rideNb);
+					output.put(i, arrayList);
+				} else {
+					// find the car could arrive in advance or in time(bonus =
+					// 0)
+					carIndex = findInTimeWithBonusCar(cars, ride, bonus);
+					// if not find
+					if (carIndex == -1) {
+						carIndex = findFirstAvailable(cars, ride);
+					}
+					ArrayList<Integer> vrides = output.get(carIndex);
+					vrides.add(ride.rideNb);
+				}
+
+				// update car place and validFrom time
+				cars[carIndex].validFrom = Math.max(ride.startTime, cars[carIndex].point.getDistance(ride.startP))
+						+ ride.startP.getDistance(ride.endP);
+				cars[carIndex].point = ride.endP;
 			} else {
-				//
-				int v = findClosestcar(cars, rides[i].startP);
-				ArrayList<Integer> vrides = output.get(v);
-				vrides.add(rides[i].rideNb);
+				ArrayList<Integer> vrides = output.get(0);
+				vrides.add(ride.rideNb);
 			}
 		}
 		return output;
 	}
 
+	public static boolean couldArriveInTime(Car[] cars, Ride ride) {
+		for (int i = 0; i < cars.length; i++) {
+			Car car = cars[i];
+			if (car.validFrom + car.point.getDistance(ride.startP) <= ride.endTime) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public static int findFirstAvailable(Car[] cars, Ride ride) {
+		int res = -1;
+		int min = Integer.MAX_VALUE;
+
+		for (int i = 0; i < cars.length; i++) {
+			Car car = cars[i];
+			int time = car.validFrom + car.point.getDistance(ride.startP);
+			if (time < min) {
+				res = i;
+				min = time;
+			}
+		}
+		return res;
+	}
+
+	// return -1 if not found, arrive in advance bonus, or in time
+	public static int findInTimeWithBonusCar(Car[] cars, Ride ride, int bonus) {
+		int res = -1;
+		for (int i = 0; i < cars.length; i++) {
+			Car car = cars[i];
+			if (car.validFrom + car.point.getDistance(ride.startP) <= ride.startTime
+					&& car.validFrom + car.point.getDistance(ride.startP) + bonus >= ride.startTime) {
+				res = i;
+			}
+		}
+		return res;
+	}
+
+
 	private static void sortRideList(List<Ride> rideList) {
 		Collections.sort(rideList, new Comparator<Ride>() {
 			@Override
 			public int compare(Ride a, Ride b) {
-				return Integer.compare(a.distanceToOrigin(), b.distanceToOrigin());
+				int endTime = Integer.compare(a.endTime, b.endTime);
+				if (endTime == 0) {
+					return Integer.compare(a.distanceToOrigin(), b.distanceToOrigin());
+				} else {
+					return endTime;
+				}
+
 			}
 		});
 	}
 
-	public static int findClosestcar(Point[] cars, Point point) {
+	public static int findClosestcar(Car[] cars, Point point) {
 		int min = Integer.MAX_VALUE;
 		int res = -1;
 		for (int i = 0; i < cars.length; i++) {
-			int distance = cars[i].getDistance(point);
+			int distance = cars[i].point.getDistance(point);
 			if (distance < min) {
 				min = distance;
 				res = i;
