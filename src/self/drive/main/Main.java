@@ -10,8 +10,8 @@ import java.util.List;
 
 public class Main {
 	public static void main(String[] args) throws IOException {
-		final String FILE_PATH_FROM = "D:\\Userfiles\\glin\\Downloads\\hashCode\\c_no_hurry.in";
-		final String FILE_PATH_TO = "D:\\Userfiles\\glin\\Downloads\\hashCode\\c_no_hurry.out";
+		final String FILE_PATH_FROM = "D:\\Userfiles\\glin\\Downloads\\hashCode\\d.in";
+		final String FILE_PATH_TO = "D:\\Userfiles\\glin\\Downloads\\hashCode\\d.out";
 
 		List<String> lines = FileIOer.read(FILE_PATH_FROM);
 
@@ -31,6 +31,7 @@ public class Main {
 		sortRideList(rideList);
 
 		int carNb = Integer.valueOf(lines.get(0).split(" ")[2]);
+		int bonus = Integer.valueOf(lines.get(0).split(" ")[4]);
 
 		Car[] cars = new Car[carNb];
 
@@ -38,7 +39,7 @@ public class Main {
 			cars[i] = new Car(new Point(0, 0), 0);
 		}
 
-		HashMap<Integer, ArrayList<Integer>> scheduledTrips = scheduleTrips(rides, carNb, cars, 0);
+		HashMap<Integer, ArrayList<Integer>> scheduledTrips = scheduleTrips(rides, carNb, cars, bonus);
 
 		writeScheduledTrips(FILE_PATH_TO, scheduledTrips);
 
@@ -67,22 +68,27 @@ public class Main {
 		// (car, list of rides)
 		HashMap<Integer, ArrayList<Integer>> output = new HashMap<>();
 
+		int notAble = 0;
+		
 		for (int i = 0; i < rides.length; i++) {
 			Ride ride = rides[i];
 
 			if (couldArriveInTime(cars, ride)) {
-				int carIndex = i;
+				int carIndex;
 				if (output.size() < carNb) {
 					ArrayList<Integer> arrayList = new ArrayList<>();
 					arrayList.add(ride.rideNb);
-					output.put(i, arrayList);
+					carIndex = i - notAble;
+					output.put(carIndex, arrayList);
 				} else {
 					// find the car could arrive in advance or in time(bonus =
 					// 0)
 					carIndex = findInTimeWithBonusCar(cars, ride, bonus);
 					// if not find
 					if (carIndex == -1) {
-						carIndex = findFirstAvailable(cars, ride);
+						carIndex = findNearestAvailable(cars, ride);
+						if (carIndex == -1)
+							carIndex = findFirstAvailable(cars, ride);
 					}
 					ArrayList<Integer> vrides = output.get(carIndex);
 					vrides.add(ride.rideNb);
@@ -95,6 +101,7 @@ public class Main {
 			} else {
 				ArrayList<Integer> vrides = output.get(0);
 				vrides.add(ride.rideNb);
+				notAble++;
 			}
 		}
 		return output;
@@ -143,9 +150,9 @@ public class Main {
 		Collections.sort(rideList, new Comparator<Ride>() {
 			@Override
 			public int compare(Ride a, Ride b) {
-				int endTime = Integer.compare(a.endTime, b.endTime);
+				int endTime = Integer.compare(a.distanceToOrigin(), b.distanceToOrigin());
 				if (endTime == 0) {
-					return Integer.compare(a.distanceToOrigin(), b.distanceToOrigin());
+					return Integer.compare(a.endTime - a.distanceToOrigin(), b.endTime - b.distanceToOrigin());
 				} else {
 					return endTime;
 				}
@@ -166,5 +173,22 @@ public class Main {
 		}
 		return res;
 	}
+	
+	public static int findNearestAvailable(Car[] cars, Ride ride){
+        int res = -1;
+        int min = Integer.MAX_VALUE;
+
+        for (int i = 0; i < cars.length; i++){
+            Car car = cars[i];
+            int distance = car.point.getDistance(ride.startP);
+            if( car.validFrom + distance + ride.startP.getDistance(ride.endP) < ride.endTime){
+                if (distance < min){
+                    res = i;
+                    min = distance;
+                }
+            }
+        }
+        return res;
+    }
 
 }
